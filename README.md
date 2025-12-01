@@ -32,7 +32,7 @@ Salve o arquivo com o nome, por exemplo, pesca_ia_probabilistica.py.
 Execute o comando abaixo no terminal para iniciar o servidor local:
 
 ```bash
-python pesca_ia_probabilistica.py
+python pesca_ia.py
 ```
 
 ## Estrutura dos Arquivos
