@@ -1,4 +1,4 @@
-# [Nome do Projeto]
+# Fishing World
 
 **Disciplina:** Introdução à Inteligência Artificial  
 **Semestre:** 2025.2  
@@ -32,7 +32,7 @@ Salve o arquivo com o nome, por exemplo, pesca_ia_probabilistica.py.
 Execute o comando abaixo no terminal para iniciar o servidor local:
 
 ```bash
-python pesca_ia.py
+python fishing_world.py
 ```
 
 ## Estrutura dos Arquivos
