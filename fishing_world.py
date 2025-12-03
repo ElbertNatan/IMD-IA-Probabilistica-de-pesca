@@ -1,253 +1,244 @@
-import random
+# main_game.py
+
+import pygame
 import os
 import time
-# FEITO EM PYTHON 3.14.0
-# --- 1. CONFIGURAÇÕES VISUAIS E CONSTANTES ---
+# É necessário importar heapq aqui, pois ele é usado pelo AStarKraken indiretamente
+import heapq 
 
-# O que existe de verdade (Escondido da IA)
-REAL_PEIXE      = "🐟"
-REAL_REDEMOINHO = "🌀"
-REAL_VAZIO      = "🟦" 
+# Importa todas as constantes, classes e lógica
+from config import *
+from agentes import AStarKraken, AmbienteProbabilistico 
 
-# NOVOS ICONES PARA CÉLULAS JÁ INTERAGIDAS
-REAL_PESCADO    = "🎣" # Onde tinha peixe e foi coletado
-REAL_AFOGADO    = "☠️" # Onde tinha redemoinho e o barco afundou (Game Over)
-
-# O que a IA vê/sente (Sensores e Memória)
-DICA_TREMOR     = "🌊"  # Indica chance de peixe
-DICA_VENTO      = "💨"  # Indica chance de perigo
-DICA_AMBOS      = "⛈️"  # Vento + Tremor
-VISAO_NEVOA     = "▒▒"   # Área não explorada (Fog of War)
-BARCO           = "🚢"  # Agente
-MORTE           = "💀"  # Icone para o barco afundado na posição final do barco
-
-# Configurações de Probabilidade e Utilidade
-PROB_INICIAL      = 0.1   # Chance base de ter algo em área desconhecida
-IMPACTO_DICA_POS  = 0.8   # Se tremer, vizinhos têm 80% de chance de ser peixe
-IMPACTO_DICA_NEG  = 0.9   # Se ventar, vizinhos têm 90% de chance de ser perigo
-
-# Pesos da Decisão
-PESO_RECOMPENSA = 100   # O quanto ela quer peixe
-PESO_RISCO      = 1000  # O quanto o agente vai temer o game over (Redemoinho)
-BONUS_EXPLORAR  = 20    # Incentivo para ir onde nunca foi
-PENALIDADE_TEDIO = 60   # Pontos perdidos por voltar ao mesmo lugar (Anti-Loop)
-
-# --- 2. CLASSE PRINCIPAL DO AMBIENTE E DO AGENTE ---
-class AmbienteProbabilistico:
-    """
-    Controla o mapa (real e o conhecido pela IA) e o estado do jogo.
-    Esta versão inclui a correção de bug para ícones permanentes.
-    """
-    def __init__(self, largura=10, altura=10):
-        self.w = largura
-        self.h = altura
+class GameController:
+    """Gerencia o loop principal, a renderização e a interação entre Agentes."""
+    def __init__(self):
+        pygame.init()
+        self.screen = pygame.display.set_mode((TOTAL_WIDTH, TOTAL_HEIGHT))
+        pygame.display.set_caption("IA Probabilística vs Kraken")
+        self.clock = pygame.time.Clock()
         
-        # Mapas
-        self.real_grid = {}     
-        self.known_grid = {}    
-        self.visit_count = {}   
-        
-        # Estado do Agente
-        self.barco_pos = (0, 0)
-        self.score = 0
-        self.game_over = False
-        
-        self._gerar_mapa_oculto()
-        self._inicializar_memoria_ia()
+        # Carregamento de Fontes
+        self.font = pygame.font.SysFont('Arial', 18)
+        self.emoji_font = pygame.font.SysFont('Segoe UI Symbol', 40)
+        if not self.emoji_font:
+            self.emoji_font = pygame.font.SysFont(pygame.font.get_default_font(), 40) 
 
-    # (Métodos _gerar_mapa_oculto, _inicializar_memoria_ia e get_vizinhos permanecem iguais)
-    def _gerar_mapa_oculto(self):
-        for x in range(self.w):
-            for y in range(self.h):
-                self.real_grid[(x, y)] = REAL_VAZIO
-        count = 0
-        while count < 6:
-            rx, ry = random.randint(1, self.w-1), random.randint(1, self.h-1)
-            if (rx, ry) != (0, 0) and self.real_grid[(rx, ry)] == REAL_VAZIO:
-                self.real_grid[(rx, ry)] = REAL_REDEMOINHO
-                count += 1
-        count = 0
-        while count < 5:
-            px, py = random.randint(0, self.w-1), random.randint(0, self.h-1)
-            if self.real_grid[(px, py)] == REAL_VAZIO and (px, py) != (0, 0):
-                self.real_grid[(px, py)] = REAL_PEIXE
-                count += 1
+        # Instancia o ambiente e os agentes
+        self.env = AmbienteProbabilistico(GRID_SIZE, GRID_SIZE)
+        self.kraken_brain = AStarKraken()
+        
+        self.running = True
+        self.turn = 0
+        self.last_utility_log = ""
+        self.kraken_chase_mode = False
 
-    def _inicializar_memoria_ia(self):
-        for x in range(self.w):
-            for y in range(self.h):
-                self.visit_count[(x, y)] = 0 
-                self.known_grid[(x, y)] = {
-                    "visual": VISAO_NEVOA,
-                    "prob_peixe": PROB_INICIAL,
-                    "prob_perigo": PROB_INICIAL,
-                    "visitado": False
-                }
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
 
-    def get_vizinhos(self, pos):
-        x, y = pos
-        vizinhos = []
-        for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < self.w and 0 <= ny < self.h:
-                vizinhos.append((nx, ny))
-        return vizinhos
-    # Fim dos métodos inalterados
+    def update(self):
+        if self.env.game_over or self.env.score >= MAX_FISH_GOAL:
+            return
 
-    def sentir_ambiente(self):
-        x, y = self.barco_pos
-        self.visit_count[(x, y)] += 1
+        self.turn += 1
         
-        vizinhos = self.get_vizinhos((x, y))
-        sentiu_tremor = False
-        sentiu_vento = False
+        # --- AÇÃO DA IA DE PESCA ---
+        self.env.sentir_ambiente()
+        new_pos = self.env.decidir_movimento()
         
-        # 2. Leitura dos Sensores (A IA 'sente' o que está REALMENTE ao redor)
-        for vx, vy in vizinhos:
-            conteudo = self.real_grid[(vx, vy)]
-            if conteudo == REAL_PEIXE: sentiu_tremor = True
-            elif conteudo == REAL_REDEMOINHO: sentiu_vento = True
+        self.last_utility_log = self._capture_utility_log(new_pos)
+        self.env.barco_pos = new_pos
         
-        # 3. Atualiza a célula atual (o que o barco viu e sentiu ali)
-        cell_info = self.known_grid[(x, y)]
-        cell_info["visitado"] = True
-        cell_info["prob_peixe"] = 0.0  
-        cell_info["prob_perigo"] = 0.0
-        
-        # Evitando que a IA sobrescreva os emojis do peixes já pescados ou redemoinhos encontrados
-        if cell_info["visual"] != REAL_PESCADO and cell_info["visual"] != REAL_AFOGADO:
-            
-            # Define o emoji da dica deixado na célula
-            if sentiu_tremor and sentiu_vento:
-                cell_info["visual"] = DICA_AMBOS
-            elif sentiu_tremor:
-                cell_info["visual"] = DICA_TREMOR
-            elif sentiu_vento:
-                cell_info["visual"] = DICA_VENTO
-            else:
-                cell_info["visual"] = REAL_VAZIO
-                
-        # 4. Propaga as probabilidades para os vizinhos (Inferência)
-        for vx, vy in vizinhos:
-            viz_info = self.known_grid[(vx, vy)]
-            
-            if not viz_info["visitado"]:
-                if sentiu_tremor: viz_info["prob_peixe"] = max(viz_info["prob_peixe"], IMPACTO_DICA_POS)
-                else: viz_info["prob_peixe"] = 0.05 
-                
-                if sentiu_vento: viz_info["prob_perigo"] = max(viz_info["prob_perigo"], IMPACTO_DICA_NEG)
-                else: viz_info["prob_perigo"] = 0.0
+        self._check_interaction(self.env.barco_pos)
 
-    # 5. Lógica de utilidade da IA
-    def decidir_movimento(self):
-        melhor_move = None
-        maior_utilidade = -float('inf') 
-        vizinhos = self.get_vizinhos(self.barco_pos)
+        # --- AÇÃO DO KRAKEN (Movimento mais lento) ---
+        if self.turn % KRAKEN_SPEED_DIVISOR == 0:
+            self._update_kraken_logic()
         
-        print("\n🧠 Raciocínio da IA (Cálculo de Utilidade):")
-        
-        for pos in vizinhos:
-            info = self.known_grid[pos]
-            recompensa = info["prob_peixe"] * PESO_RECOMPENSA
-            risco = info["prob_perigo"] * PESO_RISCO
-            exploracao = BONUS_EXPLORAR if not info["visitado"] else 0
-            tedio = self.visit_count[pos] * PENALIDADE_TEDIO
+        # Verifica colisão Barco vs Kraken
+        if self.env.barco_pos == self.env.kraken_pos:
+            self._handle_kraken_capture()
+
+    def _capture_utility_log(self, chosen_pos):
+        # Captura o log (reconstroi o cálculo para o dashboard)
+        info = self.env.known_grid.get(chosen_pos, {})
+        if info:
+            recompensa = info.get("prob_peixe", 0) * PESO_RECOMPENSA
+            risco = info.get("prob_perigo", 0) * PESO_RISCO
+            tedio = self.env.visit_count.get(chosen_pos, 0) * PENALIDADE_TEDIO
+            exploracao = BONUS_EXPLORAR if not info.get("visitado", True) else 0
             
             utilidade = recompensa - risco + exploracao - tedio
             
-            status_txt = "NOVO" if not info["visitado"] else f"VISITADO {self.visit_count[pos]}x"
-            print(f"   -> Ir para {pos} [{status_txt}]:")
-            print(f"      Utilidade: {utilidade:.1f} (Peixe:{recompensa:.0f} - Perigo:{risco:.0f} - Tédio:{tedio})")
+            return f"Uti: {utilidade:.1f} | P(Risco): {info.get('prob_perigo', 0.0):.2f}"
+        return f"Turno {self.turn}: Fuga/Erro"
 
-            if utilidade > maior_utilidade:
-                maior_utilidade = utilidade
-                melhor_move = pos
-            elif utilidade == maior_utilidade and random.random() > 0.5:
-                melhor_move = pos
-                
-        return melhor_move
 
-    def mover(self):
-        self.sentir_ambiente()
-        novo_pos = self.decidir_movimento()
+    def _update_kraken_logic(self):
+        """Lógica de Perseguição do Kraken: Checa distância e executa A*."""
+        kx, ky = self.env.kraken_pos
+        bx, by = self.env.barco_pos
+        distance = abs(kx - bx) + abs(ky - by)
         
-        if novo_pos:
-            self.barco_pos = novo_pos
-            conteudo = self.real_grid[novo_pos]
+        VISUAL_RANGE = 5
+        BREAK_CHASE_RANGE = 8
+        
+        if distance <= VISUAL_RANGE:
+            self.kraken_chase_mode = True
+            self.env.kraken_target = self.env.barco_pos
+        
+        elif distance > BREAK_CHASE_RANGE:
+            self.kraken_chase_mode = False
+            self.env.kraken_target = None 
+            self.env.kraken_path = []
+
+        if self.kraken_chase_mode and self.env.kraken_target:
+            self.env.kraken_path = self.kraken_brain.find_path(self.env, self.env.kraken_pos, self.env.kraken_target)
             
-            if conteudo == REAL_PEIXE:
-                print(f"\n🎣 SUCESSO! Peixe capturado em {novo_pos}!")
-                self.score += 1
-                self.real_grid[novo_pos] = REAL_VAZIO
-                # AQUI: Marca permanente na memória
-                self.known_grid[novo_pos]["visual"] = REAL_PESCADO 
-                time.sleep(1.5)
-                
-            elif conteudo == REAL_REDEMOINHO:
-                print(f"\n💀 GAME OVER! O barco afundou em um redemoinho em {novo_pos}!")
-                self.game_over = True
-                # AQUI: Marca permanente na memória
-                self.known_grid[novo_pos]["visual"] = REAL_AFOGADO 
-                time.sleep(2)
+            if self.env.kraken_path:
+                next_pos = self.env.kraken_path.pop(0)
+                self.env.kraken_pos = next_pos
+            else:
+                self.kraken_chase_mode = False
 
-    def desenhar(self):
-        """Desenha a interface no console."""
-        os.system('cls' if os.name == 'nt' else 'clear')
-        print(f"--- 🤖 IA PROBABILÍSTICA DE PESCA 🤖 ---")
-        print(f"Peixes Capturados: {self.score}/5")
-        print(f"Legenda: {BARCO} Eu | {DICA_TREMOR} Treme | {DICA_VENTO} Vento | {VISAO_NEVOA} Névoa")
-        print(f"            {REAL_PESCADO} Pescado | {REAL_AFOGADO} Perigo Fatal")
-        print("-" * (self.w * 3 + 2))
+    def _check_interaction(self, pos):
+        """Verifica se o barco coletou peixe ou caiu em redemoinho."""
+        x, y = pos
+        content = self.env.real_grid.get(pos)
         
-        for y in range(self.h):
-            linha = "|"
-            for x in range(self.w):
+        if content == 'PEIXE':
+            self.env.score += 1
+            self.env.real_grid[pos] = 'VAZIO'
+            self.env.known_grid[pos]["visual"] = 'PESCADO'
+            
+        elif content == 'REDEMOINHO':
+            self.env.game_over = True
+            self.env.known_grid[pos]["visual"] = 'AFOGADO'
+
+    def _handle_kraken_capture(self):
+        """Lida com a captura pelo Kraken."""
+        print("KRAKEN CAPTURA O BARCO!")
+        self.env.score = 0
+        self.env.barco_pos = (0, 0)
+        self.kraken_chase_mode = False
+        self.env.kraken_path = []
+        self.env.kraken_pos = (self.env.w - 1, self.env.h - 1)
+        
+    def draw(self):
+        self.screen.fill(WATER)
+
+        # --- Mapeamento de Ícones (Usando o que foi importado de config) ---
+        
+        # --- A. Desenho do Grid (O que a IA Sabe) ---
+        for x in range(GRID_SIZE):
+            for y in range(GRID_SIZE):
+                rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
                 pos = (x, y)
-                if pos == self.barco_pos:
-                    if self.game_over:
-                        linha += MORTE + " "
-                    else:
-                        linha += BARCO + " "
+                cell_info = self.env.known_grid[pos]
+                
+                # 1. Fundo baseado no conhecimento
+                if cell_info["visual"] == 'NEVOA':
+                    color = BLACK
+                elif cell_info["prob_perigo"] > 0.5:
+                    color = DANGER_ZONE
                 else:
-                    info = self.known_grid[pos]
-                    # Desenha o visual guardado na memória da IA
-                    if info["visitado"] or info["visual"] == REAL_PESCADO or info["visual"] == REAL_AFOGADO:
-                         linha += info["visual"] + " "
-                    else: 
-                        linha += VISAO_NEVOA + " "
-            print(linha + "|")
-        print("-" * (self.w * 3 + 2))
+                    color = SHALLOW
+                
+                pygame.draw.rect(self.screen, color, rect)
+                pygame.draw.rect(self.screen, BLACK, rect, 1)
 
-# --- 3. EXECUÇÃO PRINCIPAL ---
-def main():
-    # Instancia o jogo (A simulação)
-    jogo = AmbienteProbabilistico(largura=8, altura=8)
-    
-    print("Iniciando simulação...")
-    time.sleep(1)
-    
-    turnos = 0
-    MAX_TURNOS = 100 # Limite de turnos para evitar loops eternos
-    
-    while not jogo.game_over and turnos < MAX_TURNOS:
-        turnos += 1
+                # 2. Símbolos de Dica (Memória Visual)
+                visual_key = cell_info["visual"]
+                
+                if visual_key in ICON_MAP and visual_key != 'VAZIO':
+                    text_surface = self.emoji_font.render(ICON_MAP[visual_key], True, WHITE)
+                else:
+                    text_surface = None
+                
+                if text_surface:
+                    text_rect = text_surface.get_rect(center=rect.center)
+                    self.screen.blit(text_surface, text_rect)
+
+
+        # --- B. Desenho dos Agentes (No topo) ---
         
-        jogo.desenhar() # Mostra o mapa
-        jogo.mover()    # Executa a IA
+        # Desenha a Rota do Kraken (A*) - Debug
+        for px, py in self.env.kraken_path:
+             rect = pygame.Rect(px * TILE_SIZE, py * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+             pygame.draw.rect(self.screen, PATH_COLOR, rect, 3)
+
+        # 1. Barco
+        bx, by = self.env.barco_pos
+        boat_icon_str = ICON_MAP['MORTE'] if self.env.game_over else ICON_MAP['BARCO']
+        boat_icon = self.emoji_font.render(boat_icon_str, True, WHITE)
+        boat_rect = boat_icon.get_rect(center=(bx * TILE_SIZE + TILE_SIZE // 2, by * TILE_SIZE + TILE_SIZE // 2))
+        self.screen.blit(boat_icon, boat_rect)
         
-        if jogo.score >= 5:
-            jogo.desenhar()
-            print("\n🏆 VITÓRIA! Todos os peixes foram coletados com segurança!")
-            break
+        # 2. Kraken (Sempre desenhado no mapa REAL)
+        kx, ky = self.env.kraken_pos
+        kraken_icon = self.emoji_font.render(ICON_MAP['KRAKEN'], True, (255, 0, 0))
+        kraken_rect = kraken_icon.get_rect(center=(kx * TILE_SIZE + TILE_SIZE // 2, ky * TILE_SIZE + TILE_SIZE // 2))
+        self.screen.blit(kraken_icon, kraken_rect)
+
+        # --- C. Desenho do Dashboard ---
+        self._draw_dashboard()
+
+        pygame.display.flip()
+
+    def _draw_dashboard(self):
+        # Fundo do dashboard
+        dashboard_rect = pygame.Rect(WIDTH, 0, DASHBOARD_WIDTH, TOTAL_HEIGHT)
+        pygame.draw.rect(self.screen, BLACK, dashboard_rect)
+
+        y_offset = 20
         
-        # Pausa para dar tempo de ler os logs
-        time.sleep(1.5) 
+        title_text = self.font.render("DASHBOARD IA", True, WHITE)
+        self.screen.blit(title_text, (WIDTH + 10, y_offset))
+        y_offset += 40
+
+        metrics = [
+            f"Turno: {self.turn}",
+            f"Peixes Coletados: {self.env.score} / {MAX_FISH_GOAL}",
+            f"Carga: 0 / 1 (Simples)",
+            f"Estado da IA: {'Fuga!' if self.env._kraken_is_near() else 'Explorando'}",
+        ]
         
-    if turnos >= MAX_TURNOS:
-        print("\n⏳ Tempo esgotado (Combustível acabou).")
-    
-    print("Simulação encerrada.")
+        for text in metrics:
+            text_surface = self.font.render(text, True, WHITE)
+            self.screen.blit(text_surface, (WIDTH + 10, y_offset))
+            y_offset += 25
+            
+        y_offset += 20
+        
+        # Log de Utilidade (Raciocínio)
+        text_surface = self.font.render("Última Decisão:", True, WHITE)
+        self.screen.blit(text_surface, (WIDTH + 10, y_offset))
+        y_offset += 25
+        
+        log_text = self.font.render(self.last_utility_log, True, (255, 255, 102))
+        self.screen.blit(log_text, (WIDTH + 10, y_offset))
+        y_offset += 40
+        
+        # Status do Kraken
+        kraken_status = "Em Perseguição!" if self.kraken_chase_mode else "Em Patrulha."
+        status_color = (255, 100, 100) if self.kraken_chase_mode else (100, 255, 100)
+        
+        kraken_text = self.font.render(f"Kraken: {kraken_status}", True, status_color)
+        self.screen.blit(kraken_text, (WIDTH + 10, y_offset))
+
+    def run(self):
+        while self.running:
+            self.handle_events()
+            self.update()
+            self.draw()
+            self.clock.tick(5)
+
+        pygame.quit()
+
+# --- PONTO DE EXECUÇÃO ---
 
 if __name__ == "__main__":
-    # Garante que a função principal é chamada ao executar o script.
-    main()
+    game = GameController()
+    game.run()
