@@ -47,7 +47,9 @@ python fishing_world.py
 
 ## Resultados e Demonstração
 
-[Adicione prints da aplicação em execução ou gráficos com os resultados do modelo/agente. Se for uma aplicação Web, coloque um print da interface.]
+<img width="1000" height="600" alt="relatorio_final_ia" src="https://github.com/user-attachments/assets/57ff0009-6efc-4215-b21b-6f2f152775c5" />
+
+<img width="1000" height="600" alt="relatorio_final_ia_2" src="https://github.com/user-attachments/assets/70fcc380-26b6-4c83-989b-42035b5cf1fb" />
 
 ## Referências
 Playlist inicial utilizada para começar o projeto:
