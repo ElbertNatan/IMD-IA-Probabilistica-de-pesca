@@ -56,10 +56,10 @@ Playlist inicial utilizada para começar o projeto:
 https://www.youtube.com/watch?v=BT2cjrxGpWo&list=PLJ8PYFcmwFOxtJS4EZTGEPxMEo4YdbxdQ&index=1
 
 Palavras chaves de pesquisa:
-Pygame Básico	- pygame setup and main loop tutorial
-Renderização de Emojis - pygame render unicode emojis python
-Lógica do Kraken - python pygame astar pathfinding tutorial
-Agente Central	utility based agent python example
-Raciocínio Probabilístico	- bayesian inference simple python OU probabilistic agent belief update
-Anti-Loop (Tédio)	- local search algorithm hill climbing stagnation penalty
+* Pygame Básico	- pygame setup and main loop tutorial
+* Renderização de Emojis - pygame render unicode emojis python
+* Lógica do Kraken - python pygame astar pathfinding tutorial
+* Agente Central	utility based agent python example
+* Raciocínio Probabilístico	- bayesian inference simple python OU probabilistic agent belief update
+* Anti-Loop (Tédio)	- local search algorithm hill climbing stagnation penalty
 
