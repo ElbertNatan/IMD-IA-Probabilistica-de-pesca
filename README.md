@@ -46,10 +46,10 @@ python fishing_world.py
 * fishing_world.py // Arquivo de execução do jogo, agentes, mapa e lógica
 
 ## Resultados e Demonstração
+![IA Probabilística vs Kraken 2025-12-03 13-23-40](https://github.com/user-attachments/assets/8419a4aa-dc90-47b0-b659-f19cd1de7629)
 
-<img width="1000" height="600" alt="relatorio_final_ia" src="https://github.com/user-attachments/assets/57ff0009-6efc-4215-b21b-6f2f152775c5" />
+<img width="1000" height="600" alt="relatorio_final_ia" src="https://github.com/user-attachments/assets/6046ca8a-584d-444d-a3a3-0b75ca276972" />
 
-<img width="1000" height="600" alt="relatorio_final_ia_2" src="https://github.com/user-attachments/assets/70fcc380-26b6-4c83-989b-42035b5cf1fb" />
 
 ## Referências
 Playlist inicial utilizada para começar o projeto:
