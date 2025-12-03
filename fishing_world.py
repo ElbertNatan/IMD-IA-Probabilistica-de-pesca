@@ -3,7 +3,7 @@
 import pygame
 import os
 import time
-# É necessário importar heapq aqui, pois ele é usado pelo AStarKraken indiretamente
+import matplotlib.pyplot as plt # NOVO: Para geração de gráficos
 import heapq 
 
 # Importa todas as constantes, classes e lógica
@@ -28,6 +28,10 @@ class GameController:
         self.env = AmbienteProbabilistico(GRID_SIZE, GRID_SIZE)
         self.kraken_brain = AStarKraken()
         
+        # Estruturas de Dados para Relatório
+        self.utility_history = [] # Armazena a Utilidade de cada movimento
+        self.turn_history = []    # Armazena o número do turno
+        
         self.running = True
         self.turn = 0
         self.last_utility_log = ""
@@ -48,7 +52,9 @@ class GameController:
         self.env.sentir_ambiente()
         new_pos = self.env.decidir_movimento()
         
-        self.last_utility_log = self._capture_utility_log(new_pos)
+        # RASTREIO DE MÉTRICAS (CHAMADA PRINCIPAL)
+        self._track_performance(new_pos)
+
         self.env.barco_pos = new_pos
         
         self._check_interaction(self.env.barco_pos)
@@ -61,19 +67,23 @@ class GameController:
         if self.env.barco_pos == self.env.kraken_pos:
             self._handle_kraken_capture()
 
-    def _capture_utility_log(self, chosen_pos):
-        # Captura o log (reconstroi o cálculo para o dashboard)
+    def _track_performance(self, chosen_pos):
+        """Calcula e armazena a utilidade da decisão para o relatório."""
         info = self.env.known_grid.get(chosen_pos, {})
-        if info:
-            recompensa = info.get("prob_peixe", 0) * PESO_RECOMPENSA
-            risco = info.get("prob_perigo", 0) * PESO_RISCO
-            tedio = self.env.visit_count.get(chosen_pos, 0) * PENALIDADE_TEDIO
-            exploracao = BONUS_EXPLORAR if not info.get("visitado", True) else 0
-            
-            utilidade = recompensa - risco + exploracao - tedio
-            
-            return f"Uti: {utilidade:.1f} | P(Risco): {info.get('prob_perigo', 0.0):.2f}"
-        return f"Turno {self.turn}: Fuga/Erro"
+        
+        recompensa = info.get("prob_peixe", 0) * PESO_RECOMPENSA
+        risco = info.get("prob_perigo", 0) * PESO_RISCO
+        tedio = self.env.visit_count.get(chosen_pos, 0) * PENALIDADE_TEDIO
+        exploracao = BONUS_EXPLORAR if not info.get("visitado", True) else 0
+        
+        utilidade_valor = recompensa - risco + exploracao - tedio
+        
+        # Armazena o histórico para o gráfico
+        self.utility_history.append(utilidade_valor)
+        self.turn_history.append(self.turn)
+        
+        # Armazena o log para o Dashboard
+        self.last_utility_log = f"Uti: {utilidade_valor:.1f} | P(Risco): {info.get('prob_perigo', 0.0):.2f}"
 
 
     def _update_kraken_logic(self):
@@ -129,8 +139,12 @@ class GameController:
     def draw(self):
         self.screen.fill(WATER)
 
-        # --- Mapeamento de Ícones (Usando o que foi importado de config) ---
-        
+        # Mapeamento de strings para os ícones reais
+        ICON_MAP = {
+            'TREMOR': "🌊", 'VENTO': "💨", 'AMBOS': "⛈️", 'PESCADO': "🎣", 
+            'AFOGADO': "☠️", 'BARCO': "🚢", 'KRAKEN': "🐙", 'MORTE': "💀"
+        }
+
         # --- A. Desenho do Grid (O que a IA Sabe) ---
         for x in range(GRID_SIZE):
             for y in range(GRID_SIZE):
@@ -141,7 +155,11 @@ class GameController:
                 # 1. Fundo baseado no conhecimento
                 if cell_info["visual"] == 'NEVOA':
                     color = BLACK
+                elif cell_info["prob_perigo"] > 0.8:
+                    # Nível 3: Perigo Extremo (Vermelho Vivo) - Assumindo EXTREME_DANGER_COLOR está em config.py
+                    color = (255, 0, 0) 
                 elif cell_info["prob_perigo"] > 0.5:
+                    # Nível 2: Perigo Moderado
                     color = DANGER_ZONE
                 else:
                     color = SHALLOW
@@ -234,8 +252,48 @@ class GameController:
             self.update()
             self.draw()
             self.clock.tick(5)
+            
+            # Condição para SAIR do loop e gerar o relatório
+            if self.env.game_over or self.env.score >= MAX_FISH_GOAL:
+                self.running = False
 
         pygame.quit()
+        self._generate_report() # Chamada após o Pygame fechar
+
+    def _generate_report(self):
+        """Gera um gráfico de linhas da Utilidade ao longo do tempo usando Matplotlib."""
+        
+        if not self.utility_history:
+            print("\nNão há dados de utilidade para gerar o relatório.")
+            return
+
+        plt.figure(figsize=(10, 6))
+        
+        # Converte para arrays para melhor manipulação no Matplotlib
+        utility_array = self.utility_history
+        turn_array = self.turn_history
+        
+        plt.plot(turn_array, utility_array, marker='o', linestyle='-', color='teal', linewidth=2, markersize=4)
+        
+        # Linha base na Utilidade 0 (Onde a IA está tomando decisões neutras ou ruins)
+        plt.axhline(0, color='gray', linestyle='--') 
+        
+        # Título e Rótulos
+        status = "VITÓRIA" if self.env.score >= MAX_FISH_GOAL else "DERROTA/CAPTURA"
+        plt.title(f"Desempenho da IA: Utilidade por Turno ({status} | Score Final: {self.env.score})", fontsize=16)
+        plt.xlabel("Turno do Jogo", fontsize=14)
+        plt.ylabel("Utilidade da Decisão Escolhida", fontsize=14)
+        
+        # Legendas
+        plt.grid(True, linestyle=':', alpha=0.6)
+        plt.legend(['Utilidade do Agente'], loc='upper right')
+
+        # Salvar o gráfico como imagem PNG
+        report_filename = "relatorio_final_ia.png"
+        plt.savefig(report_filename)
+        print(f"\n--- RELATÓRIO GERADO ---")
+        print(f"Gráfico de resultados salvo como: {report_filename}")
+        print(f"O gráfico mostra como a utilidade (recompensa - risco - tédio) variou por turno.")
 
 # --- PONTO DE EXECUÇÃO ---
 

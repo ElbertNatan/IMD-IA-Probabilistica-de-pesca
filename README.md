@@ -21,6 +21,11 @@ A arquitetura tecnológica central é o Agente Baseado em Utilidade (Utility-Bas
 
 Certifique-se apenas de ter o Python 3.x configurado em seu ambiente.
 
+# Instale a biblioteca Pygame
+pip install pygame 
+OU
+pip install pygame-ce
+
 2. Preparação do Código Fonte
 Crie um novo arquivo de texto simples no seu computador.
 
@@ -36,17 +41,23 @@ python fishing_world.py
 ```
 
 ## Estrutura dos Arquivos
-
-  * `src/`: Código-fonte da aplicação ou scripts de processamento.
-  * `notebooks/`: Análises exploratórias, testes e prototipagem.
-  * `data/`: Datasets utilizados (se o tamanho permitir o upload).
-  * `assets/`: Imagens, logos ou gráficos de resultados.
+* config.py // Arquivo de configurações do jogo (quantidade de peixes, chance de redemoinho, etc...)
+* agentes.py // Arquivo de inicialização do mapa e dos agentes (barco e kraken)
+* fishing_world.py // Arquivo de execução do jogo, agentes, mapa e lógica
 
 ## Resultados e Demonstração
 
 [Adicione prints da aplicação em execução ou gráficos com os resultados do modelo/agente. Se for uma aplicação Web, coloque um print da interface.]
 
 ## Referências
+Playlist inicial utilizada para começar o projeto:
+https://www.youtube.com/watch?v=BT2cjrxGpWo&list=PLJ8PYFcmwFOxtJS4EZTGEPxMEo4YdbxdQ&index=1
 
-  * [Link para o Dataset original]
-  * [Artigo, Documentação ou Tutorial utilizado como base]
+Palavras chaves de pesquisa:
+Pygame Básico	- pygame setup and main loop tutorial
+Renderização de Emojis - pygame render unicode emojis python
+Lógica do Kraken - python pygame astar pathfinding tutorial
+Agente Central	utility based agent python example
+Raciocínio Probabilístico	- bayesian inference simple python OU probabilistic agent belief update
+Anti-Loop (Tédio)	- local search algorithm hill climbing stagnation penalty
+
