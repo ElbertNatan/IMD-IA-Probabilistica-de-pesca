@@ -24,6 +24,7 @@ TOTAL_HEIGHT = HEIGHT
 # Constantes do Jogo
 MAX_FISH_GOAL = 5
 KRAKEN_SPEED_DIVISOR = 3 # Kraken se move 1 vez a cada 3 turnos do barco
+CHANCE_REDEMOINHO = 0.05 # %5 de chance de aparecer um redemoinho
 
 # Configurações de Probabilidade e Utilidade
 PROB_INICIAL = 0.1

@@ -82,8 +82,8 @@ class GameController:
         bx, by = self.env.barco_pos
         distance = abs(kx - bx) + abs(ky - by)
         
-        VISUAL_RANGE = 5
-        BREAK_CHASE_RANGE = 8
+        VISUAL_RANGE = 3
+        BREAK_CHASE_RANGE = 5
         
         if distance <= VISUAL_RANGE:
             self.kraken_chase_mode = True
